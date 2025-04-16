@@ -5,7 +5,7 @@
   svg { width: 100vw; height: 100vh; display: block; }
   line {
     stroke: #aaa;
-    stroke-opacity: 0.2;
+    stroke-opacity: 0.05;
     transition: stroke-opacity 0.3s, stroke-width 0.3s, stroke 0.3s;
   }
   circle {
@@ -13,16 +13,15 @@
     stroke-width: 1.5px;
     fill: #69b3a2;
     cursor: pointer;
-    transition: r 0.3s, filter 0.3s;
-  }
-  circle.glow {
-    filter: drop-shadow(0 0 8px #00f8ff);
+    opacity: 0.2;
+    transition: r 0.3s, opacity 0.3s;
   }
   text {
     font: 10px sans-serif;
     fill: #fff;
     text-anchor: middle;
     pointer-events: none;
+    opacity: 0.1;
   }
 </style>
 <body>
@@ -58,9 +57,7 @@ function generateGraphData(data) {
 
   const links = [];
   const countMap = {};
-  groupedKeys = Object.values(grouped);
-
-  groupedKeys.forEach(group => {
+  Object.values(grouped).forEach(group => {
     for (let i = 0; i < group.length; i++) {
       for (let j = i + 1; j < group.length; j++) {
         const source = group[i].name;
@@ -86,7 +83,7 @@ function generateGraphData(data) {
   return { nodes, links, countMap };
 }
 
-function renderInteractiveGraph(graph) {
+function renderGraph(graph) {
   const width = window.innerWidth;
   const height = window.innerHeight;
   const radius = Math.min(width, height) / 2 - 80;
@@ -108,7 +105,7 @@ function renderInteractiveGraph(graph) {
     positions[d.id] = { x: d.x, y: d.y };
   });
 
-  const links = svg.append("g")
+  const link = svg.append("g")
     .selectAll("line")
     .data(graph.links)
     .join("line")
@@ -121,55 +118,56 @@ function renderInteractiveGraph(graph) {
       return graph.countMap[key] || 1;
     });
 
-  const circles = svg.append("g")
+  const node = svg.append("g")
     .selectAll("circle")
     .data(graph.nodes)
     .join("circle")
     .attr("r", d => size(d.rounds))
     .attr("cx", d => d.x)
-    .attr("cy", d => d.y)
-    .on("mouseover", function (event, d) {
-      d3.select(this).classed("glow", true);
+    .attr("cy", d => d.y);
 
-      links
-        .attr("stroke-opacity", l =>
-          l.source === d.id || l.target === d.id ? 1 : 0.05)
-        .attr("stroke-width", l =>
-          l.source === d.id || l.target === d.id ? 3 : 1)
-        .attr("stroke", l =>
-          l.source === d.id || l.target === d.id ? "#FFD700" : "#aaa");
-
-      circles
-        .attr("fill", n =>
-          n.id === d.id || graph.links.some(l => (l.source === d.id && l.target === n.id) || (l.target === d.id && l.source === n.id))
-            ? "#00f8ff" : "#69b3a2");
-    })
-    .on("mouseout", function () {
-      d3.select(this).classed("glow", false);
-
-      links
-        .attr("stroke-opacity", 0.2)
-        .attr("stroke-width", l => {
-          const key = [l.source, l.target].sort().join("-");
-          return graph.countMap[key] || 1;
-        })
-        .attr("stroke", "#aaa");
-
-      circles.attr("fill", "#69b3a2");
-    });
-
-  svg.append("g")
+  const label = svg.append("g")
     .selectAll("text")
     .data(graph.nodes)
     .join("text")
     .attr("x", d => d.x)
     .attr("y", d => d.y - size(d.rounds) - 5)
     .text(d => d.id);
+
+  node.on("mouseover", function(event, d) {
+    node.style("opacity", n =>
+      n.id === d.id || graph.links.some(l => (l.source === d.id && l.target === n.id) || (l.target === d.id && l.source === n.id))
+        ? 1 : 0.05);
+
+    label.style("opacity", n =>
+      n.id === d.id || graph.links.some(l => (l.source === d.id && l.target === n.id) || (l.target === d.id && l.source === n.id))
+        ? 1 : 0.05);
+
+    link
+      .attr("stroke-opacity", l =>
+        l.source === d.id || l.target === d.id ? 1 : 0.02)
+      .attr("stroke-width", l =>
+        l.source === d.id || l.target === d.id ? 3 : 1)
+      .attr("stroke", l =>
+        l.source === d.id || l.target === d.id ? "#FFD700" : "#aaa");
+  });
+
+  node.on("mouseout", function() {
+    node.style("opacity", 0.2);
+    label.style("opacity", 0.1);
+    link
+      .attr("stroke-opacity", 0.05)
+      .attr("stroke-width", l => {
+        const key = [l.source, l.target].sort().join("-");
+        return graph.countMap[key] || 1;
+      })
+      .attr("stroke", "#aaa");
+  });
 }
 
 fetchData().then(data => {
   const graph = generateGraphData(data);
-  renderInteractiveGraph(graph);
+  renderGraph(graph);
 });
 </script>
 </body>
