@@ -5,7 +5,7 @@
   svg { width: 100vw; height: 100vh; display: block; }
   line {
     stroke: #aaa;
-    stroke-opacity: 0.3;
+    stroke-opacity: 0.2;
     transition: stroke-opacity 0.3s, stroke-width 0.3s;
   }
   circle {
@@ -13,7 +13,10 @@
     stroke-width: 1.5px;
     fill: #69b3a2;
     cursor: pointer;
-    transition: r 0.3s;
+    transition: r 0.3s, filter 0.3s;
+  }
+  circle.glow {
+    filter: drop-shadow(0 0 8px #00f8ff);
   }
   text {
     font: 10px sans-serif;
@@ -37,24 +40,31 @@ async function fetchData() {
     headers: { Authorization: `Bearer ${apiKey}` }
   });
   const data = await res.json();
-  return data.records.map(r => r.fields);
+  return data.records.map(r => ({
+    name: r.fields.Name,
+    rounds: r.fields["Total Rounds (2025)"] || 1,
+    group: r.fields.Group,
+    robin: r.fields.Robin
+  }));
 }
 
-function generateEdges(data) {
+function generateGraphData(data) {
   const grouped = {};
   data.forEach(row => {
-    const key = `${row.Robin}__${row.Group}`;
+    const key = `${row.robin}__${row.group}`;
     if (!grouped[key]) grouped[key] = [];
-    grouped[key].push(row.Name);
+    grouped[key].push(row);
   });
 
   const links = [];
   const countMap = {};
-  Object.values(grouped).forEach(group => {
+  groupedKeys = Object.values(grouped);
+
+  groupedKeys.forEach(group => {
     for (let i = 0; i < group.length; i++) {
       for (let j = i + 1; j < group.length; j++) {
-        const source = group[i];
-        const target = group[j];
+        const source = group[i].name;
+        const target = group[j].name;
         const key = [source, target].sort().join("-");
         countMap[key] = (countMap[key] || 0) + 1;
         links.push({ source, target });
@@ -62,21 +72,33 @@ function generateEdges(data) {
     }
   });
 
+  const nodeMap = {};
+  data.forEach(d => {
+    nodeMap[d.name] = d.rounds;
+  });
+
   const nodeSet = new Set(links.flatMap(link => [link.source, link.target]));
-  const nodes = Array.from(nodeSet).map(id => ({ id }));
+  const nodes = Array.from(nodeSet).map(id => ({
+    id,
+    rounds: nodeMap[id] || 1
+  }));
+
   return { nodes, links, countMap };
 }
 
-function renderInteractiveCircularGraph(graph) {
+function renderInteractiveGraph(graph) {
   const width = window.innerWidth;
   const height = window.innerHeight;
   const radius = Math.min(width, height) / 2 - 80;
-
   const svg = d3.select("svg").attr("viewBox", [0, 0, width, height]);
 
   const angle = d3.scalePoint()
     .domain(graph.nodes.map(d => d.id))
     .range([0, 2 * Math.PI]);
+
+  const size = d3.scaleSqrt()
+    .domain(d3.extent(graph.nodes, d => d.rounds))
+    .range([6, 20]);
 
   const positions = {};
   graph.nodes.forEach(d => {
@@ -97,32 +119,40 @@ function renderInteractiveCircularGraph(graph) {
     .attr("stroke-width", d => {
       const key = [d.source, d.target].sort().join("-");
       return graph.countMap[key] || 1;
-    })
-    .attr("class", d => `link ${d.source.replace(/\\s+/g, '_')} ${d.target.replace(/\\s+/g, '_')}`);
+    });
 
-  svg.append("g")
+  const circles = svg.append("g")
     .selectAll("circle")
     .data(graph.nodes)
     .join("circle")
-    .attr("r", 6)
+    .attr("r", d => size(d.rounds))
     .attr("cx", d => d.x)
     .attr("cy", d => d.y)
-    .on("mouseover", function(event, d) {
-      svg.selectAll("line")
-        .attr("stroke-opacity", l => (l.source === d.id || l.target === d.id) ? 1 : 0.05)
-        .attr("stroke-width", l => (l.source === d.id || l.target === d.id) ? 3 : 1);
+    .on("mouseover", function (event, d) {
+      d3.select(this).classed("glow", true);
 
-      d3.select(this).transition().attr("r", 10);
+      links
+        .attr("stroke-opacity", l =>
+          l.source === d.id || l.target === d.id ? 1 : 0.05)
+        .attr("stroke-width", l =>
+          l.source === d.id || l.target === d.id ? 3 : 1);
+
+      circles
+        .attr("fill", n =>
+          n.id === d.id || graph.links.some(l => (l.source === d.id && l.target === n.id) || (l.target === d.id && l.source === n.id))
+            ? "#00f8ff" : "#69b3a2");
     })
-    .on("mouseout", function() {
-      svg.selectAll("line")
-        .attr("stroke-opacity", 0.3)
+    .on("mouseout", function () {
+      d3.select(this).classed("glow", false);
+
+      links
+        .attr("stroke-opacity", 0.2)
         .attr("stroke-width", l => {
           const key = [l.source, l.target].sort().join("-");
           return graph.countMap[key] || 1;
         });
 
-      d3.select(this).transition().attr("r", 6);
+      circles.attr("fill", "#69b3a2");
     });
 
   svg.append("g")
@@ -130,13 +160,13 @@ function renderInteractiveCircularGraph(graph) {
     .data(graph.nodes)
     .join("text")
     .attr("x", d => d.x)
-    .attr("y", d => d.y - 12)
+    .attr("y", d => d.y - size(d.rounds) - 5)
     .text(d => d.id);
 }
 
 fetchData().then(data => {
-  const graph = generateEdges(data);
-  renderInteractiveCircularGraph(graph);
+  const graph = generateGraphData(data);
+  renderInteractiveGraph(graph);
 });
 </script>
 </body>
