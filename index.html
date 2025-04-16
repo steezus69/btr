@@ -6,7 +6,7 @@
   line {
     stroke: #aaa;
     stroke-opacity: 0.2;
-    transition: stroke-opacity 0.3s, stroke-width 0.3s;
+    transition: stroke-opacity 0.3s, stroke-width 0.3s, stroke 0.3s;
   }
   circle {
     stroke: #fff;
@@ -135,7 +135,9 @@ function renderInteractiveGraph(graph) {
         .attr("stroke-opacity", l =>
           l.source === d.id || l.target === d.id ? 1 : 0.05)
         .attr("stroke-width", l =>
-          l.source === d.id || l.target === d.id ? 3 : 1);
+          l.source === d.id || l.target === d.id ? 3 : 1)
+        .attr("stroke", l =>
+          l.source === d.id || l.target === d.id ? "#FFD700" : "#aaa");
 
       circles
         .attr("fill", n =>
@@ -150,7 +152,8 @@ function renderInteractiveGraph(graph) {
         .attr("stroke-width", l => {
           const key = [l.source, l.target].sort().join("-");
           return graph.countMap[key] || 1;
-        });
+        })
+        .attr("stroke", "#aaa");
 
       circles.attr("fill", "#69b3a2");
     });
